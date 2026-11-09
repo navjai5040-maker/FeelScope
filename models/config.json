@@ -1,0 +1,7 @@
+{
+    "max_words": 10000,
+    "max_length": 50,
+    "padding": "post",
+    "truncating": "post",
+    "oov_token": "<unk>"
+}
