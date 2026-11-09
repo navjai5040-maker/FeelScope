@@ -153,6 +153,23 @@ def emotion_meta(label: str) -> dict:
     return EMOTION_META.get(key, {"emoji": "💬", "color": "#a78bfa", "description": "The model's predicted emotion."})
 
 
+def select_dominant_emotion(result: dict, labels: list[str]) -> dict:
+    """Choose the highest-probability class as the final prediction."""
+    probabilities = [float(value) for value in result["probabilities"]]
+
+    if len(probabilities) != len(labels):
+        raise ValueError(
+            f"Model returned {len(probabilities)} probabilities for {len(labels)} labels."
+        )
+
+    best_index = max(range(len(probabilities)), key=probabilities.__getitem__)
+    return {
+        **result,
+        "label": labels[best_index],
+        "confidence": probabilities[best_index],
+    }
+
+
 def render_probability_bars(labels: list[str], probabilities: list[float]) -> None:
     ranked = sorted(zip(labels, probabilities), key=lambda item: item[1], reverse=True)
     chunks = []
@@ -276,7 +293,8 @@ with analyzer_tab:
                 st.warning("Please enter some text before starting the analysis.")
             else:
                 with st.spinner("Reading the emotional signals…"):
-                    result = predict_many(model, tokenizer, labels, config, [text_input.strip()])[0]
+                    raw_result = predict_many(model, tokenizer, labels, config, [text_input.strip()])[0]
+                result = select_dominant_emotion(raw_result, labels)
                 st.session_state["last_result"] = {"text": text_input.strip(), **result}
                 add_to_history(text_input.strip(), result["label"], result["confidence"])
 
@@ -302,7 +320,7 @@ with analyzer_tab:
         st.markdown(
             f'''<div class="result-card">
                 <div class="result-emoji">{meta['emoji']}</div>
-                <div><div class="eyebrow">Dominant predicted emotion</div>
+                <div><div class="eyebrow">Final prediction · highest probability</div>
                 <p class="result-label">{html.escape(result['label'])}</p>
                 <p class="result-note">{meta['description']}</p></div>
                 <div class="score-chip">{confidence_pct:.1f}% score</div>
@@ -340,7 +358,10 @@ with batch_tab:
             st.warning("Please keep each batch to 100 messages or fewer.")
         else:
             with st.spinner(f"Analyzing {len(batch_items)} messages…"):
-                batch_results = predict_many(model, tokenizer, labels, config, batch_items)
+                raw_batch_results = predict_many(model, tokenizer, labels, config, batch_items)
+            batch_results = [
+                select_dominant_emotion(item, labels) for item in raw_batch_results
+            ]
             st.session_state["batch_results"] = list(zip(batch_items, batch_results))
 
     batch_results = st.session_state.get("batch_results", [])
